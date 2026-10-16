@@ -6,6 +6,23 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    # 这两个包升上去会直接把 lint / 类型检查搞崩，而且不是真的需要：
+    #
+    #   typescript >= 7：
+    #     eslint-config-next@16 内部的 typescript-eslint 只支持 <6.1.0，
+    #     装了 TS 7 之后 ESLint 连配置文件都加载不了（报
+    #     "typescript-eslint does not support TS 7.0"）。等上游支持了再放开 ——
+    #     跟踪 https://github.com/typescript-eslint/typescript-eslint/issues/10940
+    #
+    #   @types/node >= 23：
+    #     类型定义跑到运行时前面了。CI 测的是 Node 20 和 22，engines 写的
+    #     >=20.9.0，用 26 的类型定义意味着「类型检查过了但 Node 20/22 没这个 API」。
+    #     要升的话先把 CI 和 engines 的版本一起抬，不能只升 types。
+    ignore:
+      - dependency-name: 'typescript'
+        versions: ['>=7']
+      - dependency-name: '@types/node'
+        versions: ['>=23']
     groups:
       production:
         dependency-type: production
