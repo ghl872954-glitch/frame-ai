@@ -1,0 +1,15 @@
+# 仓库里一律存 LF，检出到 Windows 时也不转 CRLF —— 免得每次提交都刷一堆换行 diff
+* text=auto eol=lf
+
+# 二进制文件不要动
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+
+# lock 文件在 diff 里没意义，折叠掉
+package-lock.json -diff linguist-generated

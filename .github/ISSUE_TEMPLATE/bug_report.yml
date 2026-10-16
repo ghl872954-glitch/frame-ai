@@ -1,0 +1,103 @@
+name: Bug 报告
+description: 有东西不工作。请尽量写清楚怎么复现。
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先看一眼 README 的「常见问题」一节，可能已经有答案了。
+
+        **如果是安全问题（尤其是绕过了红线），不要在这里提** —— 请走仓库 Security
+        标签页的私密报告通道。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 实际的现象。有报错就贴报错原文，别只写「报错了」。
+      placeholder: |
+        我点中间那个圆，然后……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你预期会发生什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 越具体越好。能稳定复现的问题才修得动。
+      placeholder: |
+        1. 打开「模型」标签页
+        2. 选「DeepSeek」，填入 key
+        3. 点「测试连接」
+        4. 看到……
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及哪一块
+      options:
+        - 语音（识别 / 合成 / 打断）
+        - 模型接入（key / 地址 / 模型名）
+        - 工具执行（红线 / 授权 / 确认弹窗）
+        - 人格与记忆
+        - 界面（主题 / 语言 / 布局）
+        - 构建与依赖
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器和版本
+      description: 语音问题基本都跟浏览器有关，这条必填。
+      placeholder: Chrome 140 / Edge 140 / Firefox 130
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node 版本
+      description: 跑 `node --version` 的结果。
+      placeholder: v22.22.2
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: 导出的配置
+      description: |
+        「模型」标签页最下面有个「导出」按钮，导出的内容会自动抹掉 API key，可以放心贴。
+        不贴也行，但涉及模型接入的问题会难查很多。
+      render: json
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我搜过已有的 issue，没有重复的
+          required: true
+        - label: 这不是安全问题（安全问题走私密报告）
+          required: true

@@ -1,0 +1,47 @@
+{
+  "name": "frame",
+  "version": "0.1.0",
+  "private": true,
+  "description": "实时语音陪伴 + 能执行任务的 AI 智能体。本地优先，BYOK，自带人格与记忆。",
+  "keywords": [
+    "ai",
+    "agent",
+    "voice",
+    "assistant",
+    "byok",
+    "openai-compatible",
+    "nextjs",
+    "typescript"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run lint && npm run typecheck && npm run test"
+  },
+  "dependencies": {
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.28",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

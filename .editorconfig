@@ -1,0 +1,20 @@
+# 缩进和换行统一，别让编辑器各自为政
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+# Markdown 里行尾两个空格是有意义的（换行），不要清掉
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.svg]
+indent_size = 2

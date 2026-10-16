@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题（绕过红线、越权读取等）
+    url: https://github.com/ghl872954-glitch/frame-ai/security/advisories/new
+    about: 不要在公开 issue 里贴漏洞细节，走私密报告通道
+  - name: 使用问题 / 装不上 / 连不上模型
+    url: https://github.com/ghl872954-glitch/frame-ai/blob/main/README.md
+    about: README 的「常见问题」一节先看一遍，大部分问题那里有答案
+  - name: 想先聊聊设计再动手
+    url: https://github.com/ghl872954-glitch/frame-ai/blob/main/DESIGN.md
+    about: 设计方案里有各个决策的理由，看完再提建议会更有针对性
