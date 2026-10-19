@@ -75,6 +75,8 @@ export const zh = {
   'provider.sttModel': '语音识别模型',
   'provider.ttsModel': '语音合成模型',
   'provider.ttsVoice': '音色',
+  'provider.ttsVoiceHint':
+    '硅基流动要写成「模型名:音色名」，比如 FunAudioLLM/CosyVoice2-0.5B:alex。OpenAI 直接填 nova、alloy、shimmer 这种',
   'provider.fetchModels': '拉取模型列表',
   'provider.fetching': '正在拉取…',
   'provider.fetchOk': '拉到 {count} 个模型',
@@ -245,6 +247,8 @@ export const en: Record<MessageKey, string> = {
   'provider.sttModel': 'Speech-to-text model',
   'provider.ttsModel': 'Text-to-speech model',
   'provider.ttsVoice': 'Voice',
+  'provider.ttsVoiceHint':
+    'SiliconFlow uses "model:voice", e.g. FunAudioLLM/CosyVoice2-0.5B:alex. OpenAI takes plain names like nova, alloy, shimmer',
   'provider.fetchModels': 'Fetch model list',
   'provider.fetching': 'Fetching…',
   'provider.fetchOk': 'Found {count} models',

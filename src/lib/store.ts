@@ -33,6 +33,7 @@ import {
   type MemoryState,
 } from '@/lib/memory';
 import { BrowserStt, BrowserTts } from '@/lib/voice/browser';
+import { CloudTts, FallbackTts } from '@/lib/voice/cloud';
 import { decideTier, type TierDecision } from '@/lib/voice/router';
 import { VoiceSession, type SessionState } from '@/lib/voice/session';
 import {
@@ -158,8 +159,8 @@ export const useVox = create<VoxState>((set, get) => ({
     const caps: VoiceCapabilities = {
       // 原生实时协议还没接，先留着位置
       nativeRealtime: false,
-      cloudStt: Boolean(config.provider.sttModel),
-      cloudTts: Boolean(config.provider.ttsModel),
+      cloudStt: Boolean(config.provider.sttModel && config.provider.apiKey),
+      cloudTts: Boolean(config.provider.ttsModel && config.provider.apiKey),
       browserStt: browserSttSupported(),
       browserTts: browserTtsSupported(),
     };
@@ -177,8 +178,8 @@ export const useVox = create<VoxState>((set, get) => ({
     saveConfig(next);
     const caps: VoiceCapabilities = {
       ...get().caps,
-      cloudStt: Boolean(next.provider.sttModel),
-      cloudTts: Boolean(next.provider.ttsModel),
+      cloudStt: Boolean(next.provider.sttModel && next.provider.apiKey),
+      cloudTts: Boolean(next.provider.ttsModel && next.provider.apiKey),
     };
     const tier = decideTier(
       caps,
@@ -340,7 +341,20 @@ export const useVox = create<VoxState>((set, get) => ({
       lang: config.voice.lang,
       silenceMs: config.voice.silenceMs,
     });
-    const tts = new BrowserTts();
+
+    // 云端合成失败就退回浏览器内置 —— 音质差总比突然没声好
+    const tts =
+      tier.tts === 'cloud'
+        ? new FallbackTts(
+            new CloudTts({
+              baseUrl: config.provider.baseUrl,
+              apiKey: config.provider.apiKey,
+              model: config.provider.ttsModel,
+              voice: config.provider.ttsVoice,
+            }),
+            new BrowserTts(),
+          )
+        : new BrowserTts();
 
     session = new VoiceSession({
       stt,

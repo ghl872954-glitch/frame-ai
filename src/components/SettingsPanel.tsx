@@ -252,7 +252,11 @@ function ProviderTab() {
             }
           />
         </Field>
-        <Field label={t('provider.ttsVoice')} optional={t('provider.optional')}>
+        <Field
+          label={t('provider.ttsVoice')}
+          hint={t('provider.ttsVoiceHint')}
+          optional={t('provider.optional')}
+        >
           <input
             className="input input-mono"
             value={config.provider.ttsVoice}
