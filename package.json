@@ -23,6 +23,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "doctor": "node tools/doctor.mjs",
     "check": "npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {

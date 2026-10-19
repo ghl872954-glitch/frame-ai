@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 
 import { Composer } from '@/components/Composer';
+import { ScreenPicker } from '@/components/ScreenPicker';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { ToolConfirmDialog } from '@/components/ToolConfirmDialog';
 import { Transcript } from '@/components/Transcript';
@@ -29,6 +30,10 @@ export default function Home() {
   const clearError = useVox((state) => state.clearError);
   const idleWarning = useVox((state) => state.idleWarning);
   const partial = useVox((state) => state.partial);
+  const watching = useVox((state) => state.watching);
+  const picking = useVox((state) => state.picking);
+  const openPicker = useVox((state) => state.openPicker);
+  const stopWatching = useVox((state) => state.stopWatching);
   const panelOpen = useVox((state) => state.panelOpen);
   const setPanelOpen = useVox((state) => state.setPanelOpen);
   const config = useVox((state) => state.config);
@@ -79,6 +84,17 @@ export default function Home() {
           <span className="dot" data-state={session} />
           {config.voice.enabled ? tier.tier : 'text'}
         </span>
+
+        <button
+          type="button"
+          className="btn btn-screen"
+          data-on={watching}
+          onClick={watching ? stopWatching : openPicker}
+          title={watching ? t('screen.stopHint') : t('screen.dragHint')}
+        >
+          <span className="btn-screen-dot" aria-hidden="true" />
+          {watching ? t('screen.watching') : t('screen.open')}
+        </button>
 
         <button
           type="button"
@@ -157,6 +173,7 @@ export default function Home() {
 
       <SettingsPanel />
       <ToolConfirmDialog />
+      {picking ? <ScreenPicker /> : null}
     </main>
   );
 }

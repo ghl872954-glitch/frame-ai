@@ -9,9 +9,15 @@
 
 import type { AppConfig } from './config';
 
+/** 多模态消息的一段。目前只用到文字和图片两种。 */
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  /** 纯文本就是字符串；带图的时候是数组 */
+  content: string | ChatContentPart[];
   /** 原生 function calling 用得上 */
   tool_calls?: unknown;
   tool_call_id?: string;

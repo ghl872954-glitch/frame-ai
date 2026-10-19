@@ -193,15 +193,12 @@ export class BrowserStt implements SttAdapter {
   private armSilenceTimer(): void {
     if (this.silenceTimer) clearTimeout(this.silenceTimer);
     this.silenceTimer = setTimeout(() => {
+      // 只提交结果，不停引擎。
+      //
+      // 之前这里会 stop()，等 onend 触发后再过 250ms 才 start() ——
+      // 这 250ms 里用户说的话直接丢了，连续说话时后半句经常缺一块。
+      // commit() 内部已经清了缓冲区，不需要靠重启来「从干净状态继续」。
       this.commit();
-      // 判句后重启一次，让识别引擎从干净状态继续
-      if (this.wantRunning && this.recognition) {
-        try {
-          this.recognition.stop();
-        } catch {
-          // 忽略
-        }
-      }
     }, this.options.silenceMs);
   }
 

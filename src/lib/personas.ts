@@ -98,6 +98,8 @@ export function composeSystemPrompt(options: {
   language: 'zh' | 'en';
   memorySummary?: string;
   toolHint?: string;
+  /** 这一轮带了画面 */
+  hasScreen?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -126,6 +128,15 @@ export function composeSystemPrompt(options: {
 
   if (options.toolHint) {
     parts.push(options.toolHint);
+  }
+
+  // 带了画面就说清楚它是什么，不然模型会把它当成一张普通的图随便聊聊
+  if (options.hasScreen) {
+    parts.push(
+      options.language === 'en'
+        ? 'The image attached to the user message is a live capture of the screen region the user framed. It is what they are looking at right now. Base your answer on what is actually visible in it, and refer to concrete things you can see (text, buttons, error messages) rather than speaking in generalities. If the image does not contain enough information to answer, say so plainly.'
+        : '用户消息里附带的那张图，是用户框选的屏幕区域此刻的实时画面 —— 就是他现在正看着的东西。回答要基于画面里真实存在的内容，指出你看到的具体东西（文字、按钮、报错），别说空泛的话。如果画面里的信息不足以回答，就直接说看不出来。',
+    );
   }
 
   return parts.join('\n\n');

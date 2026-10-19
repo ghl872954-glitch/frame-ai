@@ -41,6 +41,11 @@ export interface AgentTurnInput {
   /** 之前的对话（不含本轮用户输入） */
   history: ChatMessage[];
   userText: string;
+  /**
+   * 本轮附带的画面（data URL）。看屏幕时才有。
+   * 模型看到的必须是「你说这句话时」的画面，所以每次现抓，不缓存复用。
+   */
+  image?: string | null;
   grants: Record<string, GrantState>;
   signal: AbortSignal;
   /** 可以安全播放/显示的正文片段 */
@@ -82,15 +87,24 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
     language: lang,
     memorySummary: input.config.memory.enabled ? summarizeForPrompt(input.memory) : '',
     toolHint,
+    hasScreen: Boolean(input.image),
   });
+
+  // 有画面就把文字和图片一起发 —— 只发文字的话模型根本不知道你在说屏幕上什么
+  const userContent: ChatMessage['content'] = input.image
+    ? [
+        { type: 'text', text: input.userText },
+        { type: 'image_url', image_url: { url: input.image } },
+      ]
+    : input.userText;
 
   const messages: ChatMessage[] = [
     { role: 'system', content: system },
     ...input.history,
-    { role: 'user', content: input.userText },
+    { role: 'user', content: userContent },
   ];
 
-  const appended: ChatMessage[] = [{ role: 'user', content: input.userText }];
+  const appended: ChatMessage[] = [{ role: 'user', content: userContent }];
   const records: ToolRunRecord[] = [];
   let memory = input.memory;
   let text = '';

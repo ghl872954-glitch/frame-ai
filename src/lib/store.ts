@@ -32,7 +32,11 @@ import {
   saveMemory,
   type MemoryState,
 } from '@/lib/memory';
+import type { ScreenRegion } from '@/lib/screen/types';
+import { shrinkImage } from '@/lib/screen/shrink';
 import { BrowserStt, BrowserTts } from '@/lib/voice/browser';
+import { CloudStt } from '@/lib/voice/cloud-stt';
+
 import { CloudTts, FallbackTts } from '@/lib/voice/cloud';
 import { decideTier, type TierDecision } from '@/lib/voice/router';
 import { VoiceSession, type SessionState } from '@/lib/voice/session';
@@ -91,6 +95,15 @@ interface VoxState {
   audit: AuditEntry[];
   pendingConfirm: PendingConfirm | null;
 
+  /** 正在框选屏幕 */
+  picking: boolean;
+  /** 框好的区域（屏幕真实像素），null 表示还没框 */
+  screenRegion: ScreenRegion | null;
+  /** 框内最新一帧，用来显示预览、也用来喂给模型 */
+  screenFrame: string | null;
+  /** 看屏幕总开关，默认关 —— 不开的时候一次都不截 */
+  watching: boolean;
+
   hydrate: () => void;
   patchConfig: (patch: DeepPartial<AppConfig>) => void;
   patchMemory: (patch: Partial<MemoryState>) => void;
@@ -115,6 +128,13 @@ interface VoxState {
   summarizeNow: () => Promise<void>;
 
   resolveConfirm: (approved: boolean) => void;
+
+  openPicker: () => void;
+  closePicker: () => void;
+  confirmRegion: (region: ScreenRegion) => void;
+  stopWatching: () => void;
+  /** 抓一帧当前框内画面，返回 data URL */
+  grabFrame: () => Promise<string | null>;
 }
 
 type DeepPartial<T> = {
@@ -149,6 +169,11 @@ export const useVox = create<VoxState>((set, get) => ({
   grants: {},
   audit: [],
   pendingConfirm: null,
+  picking: false,
+  screenRegion: null,
+  screenFrame: null,
+  // 默认关：不开的时候一次都不截屏，这不是配置项，是行为
+  watching: false,
 
   /* ------------------------------------------------------------------ */
 
@@ -260,6 +285,8 @@ export const useVox = create<VoxState>((set, get) => ({
         memory: get().memory,
         history: buildHistory(get().messages, config.memory.historyTurns, assistantId),
         userText: clean,
+        // 看屏幕的时候现抓一帧，让模型看到的是「你说这句话时」的画面
+        image: await get().grabFrame(),
         grants: get().grants,
         signal: abortController.signal,
         onChunk: (chunk) => {
@@ -336,11 +363,21 @@ export const useVox = create<VoxState>((set, get) => ({
       return;
     }
 
-    // 云端识别还没接，先一律用浏览器内置；接了之后在这里按 tier.stt 分流
-    const stt = new BrowserStt({
-      lang: config.voice.lang,
-      silenceMs: config.voice.silenceMs,
-    });
+    // 云端识别走录音 + 上传：准确率高，代价是说完要多等一两秒。
+    // 浏览器内置那档是实时出字，但准确率有天花板。
+    const stt =
+      tier.stt === 'cloud'
+        ? new CloudStt({
+            baseUrl: config.provider.baseUrl,
+            apiKey: config.provider.apiKey,
+            model: config.provider.sttModel,
+            language: config.voice.lang,
+            silenceMs: config.voice.silenceMs,
+          })
+        : new BrowserStt({
+            lang: config.voice.lang,
+            silenceMs: config.voice.silenceMs,
+          });
 
     // 云端合成失败就退回浏览器内置 —— 音质差总比突然没声好
     const tts =
@@ -405,6 +442,7 @@ export const useVox = create<VoxState>((set, get) => ({
             assistantId,
           ),
           userText: text,
+          image: await get().grabFrame(),
           grants: current.grants,
           signal,
           onChunk: (chunk) => {
@@ -531,6 +569,58 @@ export const useVox = create<VoxState>((set, get) => ({
     if (!pending) return;
     set({ pendingConfirm: null });
     pending.resolve(approved);
+  },
+
+  /* ---------------------------------------------------------------------- */
+  /* 看屏幕                                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  openPicker: () => set({ picking: true }),
+
+  closePicker: () => set({ picking: false }),
+
+  confirmRegion: (region) => {
+    set({
+      picking: false,
+      screenRegion: region,
+      watching: true,
+      screenFrame: null,
+    });
+    // 确认之后立刻抓一帧，让你看见它到底看到了什么
+    void get().grabFrame();
+  },
+
+  stopWatching: () => {
+    // 区域一起清掉 —— 留着会让你以为它还在看
+    set({ watching: false, screenRegion: null, screenFrame: null });
+  },
+
+  grabFrame: async () => {
+    const { screenRegion, watching } = get();
+    if (!watching || !screenRegion) return null;
+
+    try {
+      const response = await fetch('/api/screen/grab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ region: screenRegion }),
+      });
+      const data = (await response.json()) as { image?: string; error?: string };
+      if (!response.ok || !data.image) {
+        set({ error: data.error ?? translate(get().config.ui.language, 'screen.grabFailed') });
+        return null;
+      }
+
+      // 原图太大，缩到模型吃得下的尺寸再往下走
+      const shrunk = await shrinkImage(data.image);
+      set({ screenFrame: shrunk });
+      return shrunk;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   },
 }));
 

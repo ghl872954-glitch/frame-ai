@@ -1204,3 +1204,109 @@ select {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* 看屏幕                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/* 入口按钮：用强调色，让人一眼看见 —— 这是主界面上最该被发现的东西之一 */
+.btn-screen {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+  border-color: var(--accent-dim);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.btn-screen:hover {
+  border-color: var(--accent);
+}
+
+.btn-screen[data-on='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-dim);
+}
+
+.btn-screen-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  flex: none;
+}
+
+.btn-screen[data-on='true'] .btn-screen-dot {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* 框选层：铺满全屏，十字准星 */
+.picker {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #04060a;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+}
+
+.picker-shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* 选框：外面压暗，框里保持原亮度 —— 比只画个边框清楚得多 */
+.picker-box {
+  position: absolute;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.picker-size {
+  position: absolute;
+  top: -25px;
+  left: -2px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--accent-text);
+  background: var(--accent);
+}
+
+.picker-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(720px, calc(100vw - 40px));
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 18px 44px -20px rgba(0, 0, 0, 0.85);
+  cursor: default;
+}
+
+.picker-hint {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.picker-error {
+  font-size: 13px;
+  color: var(--danger);
+}
