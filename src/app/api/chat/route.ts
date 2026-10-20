@@ -58,6 +58,8 @@ export async function POST(request: Request) {
     messages: body.messages,
     stream: true,
     temperature: 0.7,
+    // 输出 token 比输入贵，默认封顶，避免模型长篇大论。语音场景本来也不需要长回复
+    max_tokens: 700,
   };
   if (Array.isArray(body.tools) && body.tools.length > 0) {
     payload.tools = body.tools;

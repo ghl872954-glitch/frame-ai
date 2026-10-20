@@ -114,6 +114,13 @@ export function composeSystemPrompt(options: {
     );
   }
 
+  // 省钱：默认就要短。语音场景没人想听长篇，输出 token 又是最贵的那部分
+  parts.push(
+    options.language === 'en'
+      ? 'Keep replies short: one or two sentences unless the user explicitly asks for detail. Do not restate the question.'
+      : '回答保持简短：一两句话能说清就别展开，除非用户明确要详细讲。不要复述问题。',
+  );
+
   if (options.language === 'en') {
     parts.push('Reply in the same language the user speaks.');
   }

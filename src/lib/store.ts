@@ -300,8 +300,8 @@ export const useVox = create<VoxState>((set, get) => ({
         memory: get().memory,
         history: buildHistory(get().messages, config.memory.historyTurns, assistantId),
         userText: clean,
-        // 看屏幕的时候现抓一帧，让模型看到的是「你说这句话时」的画面
-        image: await get().grabFrame(),
+        // 看屏幕的时候现抓一帧；纯应答（嗯/好/谢谢）就不附图，省一次图片 token
+        image: isTrivialUtterance(clean) ? null : await get().grabFrame(),
         region: get().screenRegion,
         grants: get().grants,
         signal: abortController.signal,
@@ -458,7 +458,7 @@ export const useVox = create<VoxState>((set, get) => ({
             assistantId,
           ),
           userText: text,
-          image: await get().grabFrame(),
+          image: isTrivialUtterance(text) ? null : await get().grabFrame(),
           region: get().screenRegion,
           grants: current.grants,
           signal,
@@ -709,6 +709,14 @@ function quickHash(text: string): number {
   return hash;
 }
 
+/** 纯应答（嗯/好/谢谢）不用附图 —— 省一次图片 token，也不影响正常提问 */
+const TRIVIAL_UTTERANCE =
+  /^(嗯+|哦+|好+|好的|好啊|行|对|是|是的|谢谢|多谢|ok|okay|thanks|thank you)[。.!！?？\s]*$/i;
+
+function isTrivialUtterance(text: string): boolean {
+  return TRIVIAL_UTTERANCE.test(text.trim());
+}
+
 function waitForConfirm(
   set: (partial: Partial<VoxState>) => void,
   request: ToolConfirmRequest,
@@ -740,7 +748,8 @@ function buildHistory(
   const usable = messages.filter(
     (m) => m.id !== excludeId && m.text.trim() && !m.pending,
   );
-  const limited = usable.slice(-Math.max(2, maxTurns * 2));
+  // 省钱：历史窗口封顶 12 条。更早的不再重发，长期信息靠记忆摘要
+  const limited = usable.slice(-Math.min(Math.max(2, maxTurns * 2), 12));
   return limited.map((m) => ({
     role: m.role === 'user' ? 'user' : 'assistant',
     content: m.text,

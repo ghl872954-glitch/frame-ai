@@ -3,12 +3,13 @@
  *
  * 2K 屏的一张 PNG 转成 base64 能有 4MB 上下，直接塞进请求里，
  * 轻则慢得离谱，重则被服务商按体积拒掉。
- * 这里缩到 1400px 宽、转 JPEG —— 看界面上的文字和按钮完全够用。
+ * 这里缩到 1024px 宽、转 JPEG —— 看界面上的文字和按钮够用。
+ * 1024 是权衡：再大 token 涨得快，再小字就看不清了。
  */
 
 export async function shrinkImage(
   dataUrl: string,
-  maxWidth = 1400,
+  maxWidth = 1024,
   quality = 0.82,
 ): Promise<string> {
   try {

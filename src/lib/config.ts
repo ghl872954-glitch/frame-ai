@@ -107,7 +107,8 @@ export function defaultConfig(): AppConfig {
     },
     memory: {
       enabled: true,
-      historyTurns: 20,
+      // 默认 6 轮：够接上下文，又不至于每轮把一大串历史重发一遍
+      historyTurns: 6,
     },
     ui: {
       language: 'zh',
