@@ -10,7 +10,7 @@
  * 但记忆、人格、key 这些又必须能管，所以给了展开。
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Composer } from '@/components/Composer';
 import { ScreenPicker } from '@/components/ScreenPicker';
@@ -41,10 +41,30 @@ export default function Home() {
   const t = useTranslator();
 
   const [expanded, setExpanded] = useState(false);
+  const floatChannel = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // 悬浮窗订阅「当前这句」和状态。同一个源的两个窗口，BroadcastChannel 直接通
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    floatChannel.current = new BroadcastChannel('frame-float');
+    return () => {
+      floatChannel.current?.close();
+      floatChannel.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const last = [...messages].reverse().find((m) => m.role === 'assistant');
+    floatChannel.current?.postMessage({
+      text: last?.text ?? '',
+      session,
+      lang: config.ui.language,
+    });
+  }, [messages, session, config.ui.language]);
 
   // 主题跟着配置走
   useEffect(() => {

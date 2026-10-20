@@ -1,21 +1,27 @@
 /**
  * frame 桌面外壳（Electron 主进程）。
  *
- * 职责很窄：把现有的 Next.js 服务在本机拉起来，再用一个窗口去加载它。
+ * 职责很窄：把现有的 Next.js 服务在本机拉起来，再用窗口去加载它。
  * 对话、工具、语音、记忆全在 Next 那边，这里一行都不重写。
+ *
+ * 三个窗口 / 进程：
+ *   主窗口     完整界面（对话、设置、记忆）
+ *   悬浮窗     置顶小窗，只显示当前这句，不抢焦点
+ *   Next 服务  跟着主进程一起起来，跑 /api/*
  *
  * 启动流程：
  *   1. 找一个空闲端口（默认 3000 被占就往后挪）
- *   2. 用 Electron 自带的 Node 起 next（有构建产物走 start，否则走 dev）
+ *   2. 用 Electron 自带的 Node 起 next（有构建走 start，否则 dev）
  *   3. 轮询等 HTTP 有响应
- *   4. 开窗口加载 http://127.0.0.1:<port>
- *   5. 退出时把子进程收拾干净
+ *   4. 开主窗 + 悬浮窗
+ *   5. 注册全局快捷键
+ *   6. 退出时把子进程和快捷键收拾干净
  *
  * 自检模式：设 FRAME_SMOKE=1 时不开窗口，只验证「Next 能在 Electron 里跑起来」，
  * 打完 /api/health 就退出。用来验 DESKTOP.md 里标注的最高风险项。
  */
 
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -24,7 +30,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const nextBin = join(root, 'node_modules', 'next', 'dist', 'bin', 'next');
+const preload = join(root, 'electron', 'preload.cjs');
 const isSmoke = process.env.FRAME_SMOKE === '1';
+const HOTKEY = process.env.FRAME_HOTKEY || 'Control+Shift+Space';
 
 // 无 GPU 的环境（CI、远程会话、某些虚拟机）里 GPU 进程会直接崩掉整个应用。
 // 自检时一律关硬件加速；真机上想关也可以设 FRAME_DISABLE_GPU=1。
@@ -38,6 +46,13 @@ if (isSmoke || process.env.FRAME_DISABLE_GPU === '1') {
 
 let server = null;
 let mainWindow = null;
+let floatWindow = null;
+/** 是不是我们为了截屏主动藏起来的 —— 只有这种情况才需要放回来 */
+let captureHidden = false;
+
+/* -------------------------------------------------------------------------- */
+/* 服务                                                                       */
+/* -------------------------------------------------------------------------- */
 
 /** 找一个能监听的端口；从 3000 开始，被占就 +1 */
 function findFreePort(start = 3000, tries = 20) {
@@ -102,7 +117,22 @@ function startNext(port) {
   return true;
 }
 
-function createWindow(url) {
+function stopServer() {
+  if (server && !server.killed) {
+    try {
+      server.kill();
+    } catch {
+      // 已经没了
+    }
+    server = null;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* 窗口                                                                       */
+/* -------------------------------------------------------------------------- */
+
+function createMainWindow(url) {
   mainWindow = new BrowserWindow({
     width: 980,
     height: 720,
@@ -112,6 +142,7 @@ function createWindow(url) {
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
+      preload,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -132,16 +163,116 @@ function createWindow(url) {
   });
 }
 
-function stopServer() {
-  if (server && !server.killed) {
-    try {
-      server.kill();
-    } catch {
-      // 已经没了
-    }
-    server = null;
-  }
+function createFloatWindow(url) {
+  const workArea = screen.getPrimaryDisplay().workArea;
+  const width = 360;
+  const height = 96;
+  const margin = 24;
+
+  floatWindow = new BrowserWindow({
+    width,
+    height,
+    x: workArea.x + workArea.width - width - margin,
+    y: workArea.y + workArea.height - height - margin,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    // 关键：不抢焦点。你在别的软件里打字，它冒出来也不会把光标抢走
+    focusable: false,
+    show: false,
+    hasShadow: false,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  // screen-saver 级别，比普通置顶更靠前，全屏应用也能压住
+  floatWindow.setAlwaysOnTop(true, 'screen-saver');
+
+  floatWindow.webContents.on('did-finish-load', () => {
+    if (floatWindow && !floatWindow.isDestroyed()) floatWindow.showInactive();
+  });
+
+  floatWindow.loadURL(`${url}/float`);
+  floatWindow.on('closed', () => {
+    floatWindow = null;
+  });
 }
+
+/** 显示/隐藏主窗：隐藏时用 hide，显示时拉回来并聚焦 */
+function toggleMain() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (mainWindow.isVisible() && mainWindow.isFocused()) {
+    mainWindow.hide();
+  } else {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  return true;
+}
+
+/* -------------------------------------------------------------------------- */
+/* IPC                                                                        */
+/* -------------------------------------------------------------------------- */
+
+function registerIpc() {
+  ipcMain.handle('frame:hide-for-capture', () => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return false;
+    captureHidden = true;
+    mainWindow.hide();
+    if (floatWindow && !floatWindow.isDestroyed() && floatWindow.isVisible()) {
+      floatWindow.hide();
+    }
+    return true;
+  });
+
+  ipcMain.handle('frame:show-after-capture', () => {
+    if (!captureHidden) return false;
+    captureHidden = false;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    if (floatWindow && !floatWindow.isDestroyed()) {
+      floatWindow.showInactive();
+    }
+    return true;
+  });
+
+  ipcMain.handle('frame:toggle-main', () => toggleMain());
+
+  // 悬浮窗内容高度变化 → 窗口跟着收放，底边保持不动
+  ipcMain.on('frame:resize-float', (_event, height) => {
+    if (!floatWindow || floatWindow.isDestroyed()) return;
+    const bounds = floatWindow.getBounds();
+    const nextHeight = Math.max(40, Math.min(640, Math.round(Number(height) || bounds.height)));
+    if (nextHeight === bounds.height) return;
+    const bottom = bounds.y + bounds.height;
+    floatWindow.setBounds({
+      x: bounds.x,
+      y: bottom - nextHeight,
+      width: bounds.width,
+      height: nextHeight,
+    });
+  });
+
+  ipcMain.on('frame:close-float', () => {
+    if (floatWindow && !floatWindow.isDestroyed()) floatWindow.close();
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* 启动                                                                       */
+/* -------------------------------------------------------------------------- */
 
 async function boot() {
   let port;
@@ -185,7 +316,14 @@ async function boot() {
     return;
   }
 
-  createWindow(url);
+  registerIpc();
+  createMainWindow(url);
+  createFloatWindow(url);
+
+  const registered = globalShortcut.register(HOTKEY, () => toggleMain());
+  if (!registered) {
+    console.warn(`[frame] 全局快捷键 ${HOTKEY} 注册失败，可能被别的程序占了`);
+  }
 }
 
 if (isSmoke) {
@@ -197,8 +335,9 @@ if (isSmoke) {
     app.quit();
   } else {
     app.on('second-instance', () => {
-      if (mainWindow) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
         mainWindow.focus();
       }
     });
@@ -208,6 +347,11 @@ if (isSmoke) {
     app.on('window-all-closed', () => {
       stopServer();
       app.quit();
+    });
+
+    app.on('will-quit', () => {
+      globalShortcut.unregisterAll();
+      stopServer();
     });
 
     app.on('before-quit', stopServer);

@@ -47,7 +47,13 @@ export function ScreenPicker() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const desktop = typeof window !== 'undefined' ? window.frameDesktop : undefined;
+      let hid = false;
       try {
+        // 先把挡路的窗口藏起来，否则截到的全是 frame 自己
+        hid = (await desktop?.hideForCapture?.()) ?? false;
+        if (hid) await new Promise((resolve) => setTimeout(resolve, 220));
+
         const response = await fetch('/api/screen/grab', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -59,6 +65,9 @@ export function ScreenPicker() {
         setShot(data);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        // 不管成功失败，都得把窗口放回来
+        if (hid) await desktop?.showAfterCapture?.();
       }
     })();
 

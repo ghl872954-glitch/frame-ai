@@ -16,6 +16,14 @@ const config = [
       ],
     },
   },
+  {
+    // Electron 的 preload 必须是 CommonJS（sandbox 下只能用 require），
+    // 主进程是 .mjs 走 import。这条规则只对 src 有意义，electron 目录放开。
+    files: ['electron/**/*.{js,cjs,mjs}'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 ];
 
 export default config;
