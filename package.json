@@ -31,7 +31,7 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
-    "next": "^15.5.0",
+    "next": "^16.4.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.0"
