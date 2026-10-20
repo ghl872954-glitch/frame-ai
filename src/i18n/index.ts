@@ -45,6 +45,14 @@ export const zh = {
   'screen.watching': '正在看',
   'screen.stop': '停止',
   'screen.stopHint': '点停止就不看了，框也一起清掉',
+  'screen.watchAll': '看整个屏幕',
+  'screen.watchingAll': '正在看整个屏幕',
+  'screen.watchAllHint': '让它持续看整个屏幕（所有显示器），先征得同意才开',
+  'screen.consentTitle': '让它看整个屏幕？',
+  'screen.consentBody':
+    '开启后它会每隔两秒截一张整个屏幕（所有显示器）的画面，画面变了才更新。它不会自己开口，你说话时看到的是当下画面。随时点「停止」就停。',
+  'screen.consentHint': '这会让模型看到屏幕上的一切，包括你正在编辑的内容。确认要开再点。',
+  'screen.consentAllow': '允许，开始看',
 
   'composer.placeholder': '也可以直接打字…',
   'composer.send': '发送',
@@ -228,6 +236,15 @@ export const en: Record<MessageKey, string> = {
   'screen.watching': 'Watching',
   'screen.stop': 'Stop',
   'screen.stopHint': 'Stop and clear the selection',
+  'screen.watchAll': 'Watch full screen',
+  'screen.watchingAll': 'Watching full screen',
+  'screen.watchAllHint': 'Keep watching the whole screen (all displays); asks for consent first',
+  'screen.consentTitle': 'Let it watch your whole screen?',
+  'screen.consentBody':
+    'Once on, it captures the whole screen (all displays) every couple of seconds and updates only when something changes. It will not speak on its own; when you talk, it sees the current screen. Click Stop anytime.',
+  'screen.consentHint':
+    'This lets the model see everything on screen, including what you are editing. Only enable it if you are sure.',
+  'screen.consentAllow': 'Allow and start',
 
   'composer.placeholder': 'Or just type…',
   'composer.send': 'Send',

@@ -103,6 +103,8 @@ interface VoxState {
   screenFrame: string | null;
   /** 看屏幕总开关，默认关 —— 不开的时候一次都不截 */
   watching: boolean;
+  /** 「看整个屏幕」的同意弹窗开着 */
+  watchFullPrompt: boolean;
 
   hydrate: () => void;
   patchConfig: (patch: DeepPartial<AppConfig>) => void;
@@ -133,7 +135,13 @@ interface VoxState {
   closePicker: () => void;
   confirmRegion: (region: ScreenRegion) => void;
   stopWatching: () => void;
-  /** 抓一帧当前框内画面，返回 data URL */
+  /** 打开「看整个屏幕」的同意弹窗 */
+  requestFullWatch: () => void;
+  /** 用户同意后，开始持续看整个屏幕 */
+  confirmFullWatch: () => void;
+  /** 用户拒绝 */
+  cancelFullWatch: () => void;
+  /** 抓一帧当前画面，返回 data URL */
   grabFrame: () => Promise<string | null>;
 }
 
@@ -146,6 +154,12 @@ const AUDIT_LIMIT = 200;
 
 let session: VoiceSession | null = null;
 let abortController: AbortController | null = null;
+/** 整屏观看的抓帧定时器 */
+let watchTimer: number | null = null;
+/** 正在抓帧，避免定时器和「说话时现抓」撞在一起 */
+let capturing = false;
+/** 上一帧的指纹，画面没变就不更新状态 */
+let lastFrameHash = 0;
 
 export const useVox = create<VoxState>((set, get) => ({
   hydrated: false,
@@ -174,6 +188,7 @@ export const useVox = create<VoxState>((set, get) => ({
   screenFrame: null,
   // 默认关：不开的时候一次都不截屏，这不是配置项，是行为
   watching: false,
+  watchFullPrompt: false,
 
   /* ------------------------------------------------------------------ */
 
@@ -577,11 +592,16 @@ export const useVox = create<VoxState>((set, get) => ({
   /* 看屏幕                                                                  */
   /* ---------------------------------------------------------------------- */
 
-  openPicker: () => set({ picking: true }),
+  openPicker: () => {
+    stopWatchLoop();
+    set({ picking: true, watchFullPrompt: false });
+  },
 
   closePicker: () => set({ picking: false }),
 
   confirmRegion: (region) => {
+    // 框选模式是按需抓帧，不跑整屏定时器
+    stopWatchLoop();
     set({
       picking: false,
       screenRegion: region,
@@ -593,19 +613,41 @@ export const useVox = create<VoxState>((set, get) => ({
   },
 
   stopWatching: () => {
+    stopWatchLoop();
     // 区域一起清掉 —— 留着会让你以为它还在看
     set({ watching: false, screenRegion: null, screenFrame: null });
   },
 
+  requestFullWatch: () => set({ watchFullPrompt: true }),
+
+  confirmFullWatch: () => {
+    // screenRegion 为 null = 整个虚拟屏幕（所有显示器）
+    set({
+      watchFullPrompt: false,
+      picking: false,
+      screenRegion: null,
+      watching: true,
+      screenFrame: null,
+    });
+    startWatchLoop(get);
+    void get().grabFrame();
+  },
+
+  cancelFullWatch: () => set({ watchFullPrompt: false }),
+
   grabFrame: async () => {
     const { screenRegion, watching } = get();
-    if (!watching || !screenRegion) return null;
+    if (!watching) return null;
+    // 定时器和「说话现抓」撞一起时，直接用上一帧，别叠加两次截屏
+    if (capturing) return get().screenFrame;
 
+    capturing = true;
     try {
       const response = await fetch('/api/screen/grab', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region: screenRegion }),
+        // 没框区域 = 截整个虚拟屏幕（所有显示器）
+        body: JSON.stringify(screenRegion ? { region: screenRegion } : {}),
       });
       const data = (await response.json()) as { image?: string; error?: string };
       if (!response.ok || !data.image) {
@@ -615,13 +657,19 @@ export const useVox = create<VoxState>((set, get) => ({
 
       // 原图太大，缩到模型吃得下的尺寸再往下走
       const shrunk = await shrinkImage(data.image);
-      set({ screenFrame: shrunk });
+      const hash = quickHash(shrunk);
+      if (hash !== lastFrameHash || !get().screenFrame) {
+        lastFrameHash = hash;
+        set({ screenFrame: shrunk });
+      }
       return shrunk;
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : String(error),
       });
       return null;
+    } finally {
+      capturing = false;
     }
   },
 }));
@@ -633,6 +681,32 @@ export const useVox = create<VoxState>((set, get) => ({
 export function useTranslator(): Translator {
   const lang = useVox((state) => state.config.ui.language);
   return createTranslator(lang);
+}
+
+/** 整屏观看：每 2 秒抓一帧，画面变了才更新状态 */
+function startWatchLoop(get: () => VoxState): void {
+  stopWatchLoop();
+  if (typeof window === 'undefined') return;
+  watchTimer = window.setInterval(() => {
+    void get().grabFrame();
+  }, 2000);
+}
+
+function stopWatchLoop(): void {
+  if (watchTimer !== null) {
+    if (typeof window !== 'undefined') window.clearInterval(watchTimer);
+    watchTimer = null;
+  }
+  lastFrameHash = 0;
+}
+
+/** 便宜的指纹：长度 + 采样几个字符，够判断画面变没变 */
+function quickHash(text: string): number {
+  let hash = text.length;
+  for (let i = 0; i < text.length; i += 97) {
+    hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  }
+  return hash;
 }
 
 function waitForConfirm(

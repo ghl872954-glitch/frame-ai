@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Composer } from '@/components/Composer';
+import { FullWatchConsent } from '@/components/FullWatchConsent';
 import { ScreenPicker } from '@/components/ScreenPicker';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { ToolConfirmDialog } from '@/components/ToolConfirmDialog';
@@ -31,8 +32,10 @@ export default function Home() {
   const idleWarning = useVox((state) => state.idleWarning);
   const partial = useVox((state) => state.partial);
   const watching = useVox((state) => state.watching);
+  const screenRegion = useVox((state) => state.screenRegion);
   const picking = useVox((state) => state.picking);
   const openPicker = useVox((state) => state.openPicker);
+  const requestFullWatch = useVox((state) => state.requestFullWatch);
   const stopWatching = useVox((state) => state.stopWatching);
   const panelOpen = useVox((state) => state.panelOpen);
   const setPanelOpen = useVox((state) => state.setPanelOpen);
@@ -105,16 +108,39 @@ export default function Home() {
           {config.voice.enabled ? tier.tier : 'text'}
         </span>
 
-        <button
-          type="button"
-          className="btn btn-screen"
-          data-on={watching}
-          onClick={watching ? stopWatching : openPicker}
-          title={watching ? t('screen.stopHint') : t('screen.dragHint')}
-        >
-          <span className="btn-screen-dot" aria-hidden="true" />
-          {watching ? t('screen.watching') : t('screen.open')}
-        </button>
+        {watching ? (
+          <button
+            type="button"
+            className="btn btn-screen"
+            data-on
+            onClick={stopWatching}
+            title={t('screen.stopHint')}
+          >
+            <span className="btn-screen-dot" aria-hidden="true" />
+            {screenRegion ? t('screen.watching') : t('screen.watchingAll')}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="btn btn-screen"
+              onClick={openPicker}
+              title={t('screen.dragHint')}
+            >
+              <span className="btn-screen-dot" aria-hidden="true" />
+              {t('screen.open')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-screen"
+              onClick={requestFullWatch}
+              title={t('screen.watchAllHint')}
+            >
+              <span className="btn-screen-dot" aria-hidden="true" />
+              {t('screen.watchAll')}
+            </button>
+          </>
+        )}
 
         <button
           type="button"
@@ -193,6 +219,7 @@ export default function Home() {
 
       <SettingsPanel />
       <ToolConfirmDialog />
+      <FullWatchConsent />
       {picking ? <ScreenPicker /> : null}
     </main>
   );
