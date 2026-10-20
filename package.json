@@ -26,7 +26,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "doctor": "node tools/doctor.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "next": "^15.5.0",
@@ -39,6 +41,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.12.0",
     "eslint-config-next": "^16.4.0",
     "typescript": "~6.0.3",
@@ -46,5 +49,34 @@
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "build": {
+    "appId": "com.frame.desktop",
+    "productName": "frame",
+    "directories": {
+      "output": "release"
+    },
+    "asar": false,
+    "npmRebuild": false,
+    "files": [
+      "**/*",
+      ".next/**/*",
+      "!src/**",
+      "!tests/**",
+      "!tools/**",
+      "!docs/**",
+      "!release/**",
+      "!*.md",
+      "!fix-dev-deps.patch"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": false
+    }
   }
 }

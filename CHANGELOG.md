@@ -46,6 +46,11 @@
   现在框选前通过 IPC 把主窗和悬浮窗藏起来，等 220ms 再截，截完放回来。
   浏览器里没有这个能力，自动降级成原来的行为。
 
+- **打包成 Windows 程序（D5）**。`npm run pack` 出免安装 exe，双击就能开，不用装 Node。
+  - 用 electron-builder，`asar: false` —— 打包后 `next` 子进程要能直接读 `node_modules`
+  - 打包后的 exe 里 Next 服务和 API 路由照常跑（自检验过 `/api/health`）
+  - `npm run dist` 出单文件 portable 版；产物在 `release/`，不进版本库
+
 ### 修复
 
 - **判句之后把识别引擎停掉，中间丢音频**。静音判定「说完了」就 `stop()`，
