@@ -53,6 +53,7 @@ export const CAPABILITIES: Capability[] = [
   // L4：最高风险，每次确认 + 展示完整命令
   { id: 'shell.run', level: 4, label: '执行命令', defaultAllow: false },
   { id: 'http.request', level: 4, label: '发起网络请求', defaultAllow: false },
+  { id: 'desktop.control', level: 4, label: '替你点击或输入', defaultAllow: false },
 ];
 
 export function findCapability(id: string): Capability | undefined {

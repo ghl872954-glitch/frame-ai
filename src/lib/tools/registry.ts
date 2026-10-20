@@ -11,6 +11,7 @@
 import { calculate, CalcError } from './calculator';
 import { checkUrl, htmlToText } from './net';
 import { decide, type GrantState } from './policy';
+import type { ScreenRegion } from '@/lib/screen/types';
 
 export interface ToolParameter {
   type: 'string' | 'number' | 'boolean';
@@ -95,6 +96,36 @@ export const TOOLS: ToolDefinition[] = [
     },
     serverOnly: true,
   },
+  {
+    name: 'desktop_click',
+    capability: 'desktop.control',
+    description:
+      '在用户框选的屏幕区域里点一下。坐标用相对框选区域的比例：左上角是 0,0，右下角是 1,1。只在用户明确要求你替他点某个东西时用，并且要先说清楚你要点哪儿',
+    parameters: {
+      type: 'object',
+      properties: {
+        nx: { type: 'number', description: '横向位置，0~1 的比例' },
+        ny: { type: 'number', description: '纵向位置，0~1 的比例' },
+        note: { type: 'string', description: '一句话说明点的是什么，比如「保存按钮」' },
+      },
+      required: ['nx', 'ny'],
+    },
+    serverOnly: true,
+  },
+  {
+    name: 'desktop_type',
+    capability: 'desktop.control',
+    description:
+      '把一段文字打到你当前光标所在的位置。只在用户明确要求「帮我打字 / 填进去」时用，内容要原样照打',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: '要输入的文字' },
+      },
+      required: ['text'],
+    },
+    serverOnly: true,
+  },
 ];
 
 export function findTool(name: string): ToolDefinition | undefined {
@@ -123,6 +154,10 @@ export interface ExecuteOptions {
   /** 用户在确认弹窗里点了同意 */
   approved?: boolean;
   lang?: 'zh' | 'en';
+  /** 框选的屏幕区域 —— 动作层把相对坐标换算成绝对坐标要用 */
+  region?: ScreenRegion;
+  /** 打断信号：高亮等待期间用户开口就放弃 */
+  signal?: AbortSignal;
 }
 
 /**
@@ -180,6 +215,10 @@ async function runHandler(
     case 'fetch_url':
     case 'web_search':
       return handleRemote(def, args);
+    case 'desktop_click':
+      return handleDesktopClick(args, options);
+    case 'desktop_type':
+      return handleDesktopType(args, options);
     default:
       return { ok: false, content: `工具 ${def.name} 还没实现` };
   }
@@ -235,6 +274,95 @@ async function handleRemote(def: ToolDefinition, args: Record<string, unknown>):
   return (await response.json()) as ToolResult;
 }
 
+/* -------------------------------------------------------------------------- */
+/* 动作层：点击 / 输入                                                         */
+/* -------------------------------------------------------------------------- */
+
+async function handleDesktopClick(
+  args: Record<string, unknown>,
+  options: ExecuteOptions,
+): Promise<ToolResult> {
+  const region = options.region;
+  if (!region) {
+    return {
+      ok: false,
+      content: '还没框选屏幕区域。先点「看屏幕」框一块，它才知道往哪儿点',
+    };
+  }
+
+  const nx = clamp01(Number(args.nx));
+  const ny = clamp01(Number(args.ny));
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) {
+    return { ok: false, content: '点击坐标不合法' };
+  }
+
+  // 锁在框内：0~1 映射到框的宽高，数学上就不可能点到框外
+  const x = Math.round(region.x + nx * region.width);
+  const y = Math.round(region.y + ny * region.height);
+
+  // 动作前先在那个位置闪一下，让你看清它要点哪儿
+  await highlightPoint(x, y, options.signal);
+  if (options.signal?.aborted) {
+    return { ok: false, content: '你打断了这次操作，没有点下去' };
+  }
+
+  return postDesktopAction({ action: 'click', x, y });
+}
+
+async function handleDesktopType(
+  args: Record<string, unknown>,
+  options: ExecuteOptions,
+): Promise<ToolResult> {
+  const text = String(args.text ?? '');
+  if (!text.trim()) return { ok: false, content: '没有要输入的内容' };
+  if (text.length > 4000) return { ok: false, content: '一次输入太长，分几次来吧' };
+  if (options.signal?.aborted) return { ok: false, content: '你打断了这次操作，没有输入' };
+
+  return postDesktopAction({ action: 'type', text });
+}
+
+async function postDesktopAction(body: Record<string, unknown>): Promise<ToolResult> {
+  const response = await fetch('/api/desktop/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+    detail?: string;
+  };
+  if (!response.ok || !data.ok) {
+    return { ok: false, content: data.error ?? `动作服务返回 ${response.status}` };
+  }
+  return { ok: true, content: data.detail ?? '已执行', display: data.detail };
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return Number.NaN;
+  return Math.min(1, Math.max(0, value));
+}
+
+/** 让桌面上闪一下那个点；浏览器里没这个能力就跳过 */
+async function highlightPoint(x: number, y: number, signal?: AbortSignal): Promise<void> {
+  const bridge = typeof window !== 'undefined' ? window.frameDesktop : undefined;
+  if (!bridge?.highlight) return;
+
+  const job = bridge.highlight(x, y).catch(() => undefined);
+  if (!signal) {
+    await job;
+    return;
+  }
+  // 高亮等待期间用户开口，就别等了
+  await Promise.race([
+    job,
+    new Promise<void>((resolve) => {
+      if (signal.aborted) resolve();
+      else signal.addEventListener('abort', () => resolve(), { once: true });
+    }),
+  ]);
+}
+
 /** 把参数拼成一段文本交给红线扫描 */
 function buildPayload(def: ToolDefinition, args: Record<string, unknown>): string {
   switch (def.name) {
@@ -244,6 +372,11 @@ function buildPayload(def: ToolDefinition, args: Record<string, unknown>): strin
       return String(args.query ?? '');
     case 'calculate':
       return String(args.expression ?? '');
+    case 'desktop_click':
+      return `${args.nx} ${args.ny}`;
+    case 'desktop_type':
+      // 打进去的文字不是命令，不该按命令红线去扫；安全性由「每次确认」兜底
+      return '';
     default:
       return Object.values(args).map((v) => String(v)).join(' ');
   }

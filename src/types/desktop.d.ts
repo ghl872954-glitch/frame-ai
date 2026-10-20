@@ -16,6 +16,12 @@ declare global {
     showAfterCapture: () => Promise<boolean>;
     /** 显示/隐藏主窗 */
     toggleMain: () => Promise<boolean>;
+    /** 强制把主窗叫到前台 */
+    showMain: () => Promise<boolean>;
+    /** 在屏幕绝对坐标上闪一个高亮圈 */
+    highlight: (x: number, y: number) => Promise<boolean>;
+    /** 高亮窗订阅要闪的点，返回取消订阅函数 */
+    onHighlightPoint: (cb: (point: { x: number; y: number }) => void) => () => void;
     /** 悬浮窗把内容高度报给主进程 */
     resizeFloat: (height: number) => void;
     closeFloat: () => void;

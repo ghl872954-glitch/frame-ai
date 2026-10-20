@@ -15,6 +15,7 @@ import { streamChat, type ChatMessage } from './chat';
 import type { AppConfig } from './config';
 import { addFact, type MemoryState, summarizeForPrompt } from './memory';
 import { composeSystemPrompt, findPersona } from './personas';
+import type { ScreenRegion } from './screen/types';
 import { buildToolHint, parseToolCalls } from './tools/protocol';
 import { decide, findCapability, type GrantState } from './tools/policy';
 import { executeTool, visibleTools } from './tools/registry';
@@ -46,6 +47,8 @@ export interface AgentTurnInput {
    * 模型看到的必须是「你说这句话时」的画面，所以每次现抓，不缓存复用。
    */
   image?: string | null;
+  /** 框选的屏幕区域 —— 动作层把相对坐标换算成绝对坐标要用 */
+  region?: ScreenRegion | null;
   grants: Record<string, GrantState>;
   signal: AbortSignal;
   /** 可以安全播放/显示的正文片段 */
@@ -197,20 +200,26 @@ async function runTool(
     return { name, args, status: 'error', detail: `没有这个工具，或者它被你关掉了：${name}` };
   }
 
-  const payload = Object.values(args).map((v) => String(v)).join(' ');
+  // 打字/点击的内容不是命令，不按命令红线扫；安全性靠「每次确认」兜底
+  const payload =
+    tool.capability === 'desktop.control'
+      ? ''
+      : Object.values(args).map((v) => String(v)).join(' ');
   const decision = decide(tool.capability, payload, context.grants);
 
   if (decision.outcome === 'deny') {
     return { name, args, status: 'denied', detail: decision.reason ?? '被安全策略拒绝' };
   }
 
+  // 动作层永远要过确认，即使用户在设置里把这项点成「以后都允许」
+  const mustConfirm = decision.outcome === 'confirm' || tool.capability === 'desktop.control';
   let approved = false;
-  if (decision.outcome === 'confirm') {
+  if (mustConfirm) {
     const capability = findCapability(tool.capability);
     const request: ToolConfirmRequest = {
       capabilityId: tool.capability,
       label: capability?.label ?? name,
-      detail: payload,
+      detail: describeAction(name, args, payload),
       level: capability?.level ?? 4,
     };
     approved = context.confirm ? await context.confirm(request) : false;
@@ -219,10 +228,16 @@ async function runTool(
     }
   }
 
+  if (context.signal.aborted) {
+    return { name, args, status: 'denied', detail: '被打断了，没有执行' };
+  }
+
   const result = await executeTool(name, args, {
     grants: context.grants,
     approved: true,
     lang: context.config.ui.language,
+    region: context.region ?? undefined,
+    signal: context.signal,
   });
 
   return {
@@ -231,6 +246,26 @@ async function runTool(
     status: result.ok ? 'done' : 'error',
     detail: result.display ?? result.content,
   };
+}
+
+/** 确认弹窗里给人看的一句话 */
+function describeAction(
+  name: string,
+  args: Record<string, unknown>,
+  fallback: string,
+): string {
+  if (name === 'desktop_click') {
+    const note = String(args.note ?? '').trim();
+    const x = Math.round(Number(args.nx) * 100);
+    const y = Math.round(Number(args.ny) * 100);
+    return note
+      ? `点一下「${note}」（位置 ${x}% / ${y}%）`
+      : `在框选区域点一下（位置 ${x}% / ${y}%）`;
+  }
+  if (name === 'desktop_type') {
+    return `输入文字：${String(args.text ?? '')}`;
+  }
+  return fallback;
 }
 
 function buildToolResultMessage(

@@ -20,6 +20,8 @@ export function ToolConfirmDialog() {
   if (!pending) return null;
 
   const { request } = pending;
+  // 动作层（点击/输入）永远逐次确认，不给「以后都允许」，免得按钮说了不算
+  const canAlwaysAllow = request.capabilityId !== 'desktop.control';
 
   const allowAlways = () => {
     setGrant(request.capabilityId, 'granted');
@@ -44,9 +46,11 @@ export function ToolConfirmDialog() {
           <button type="button" className="btn" onClick={() => resolve(true)}>
             {t('tool.approveOnce')}
           </button>
-          <button type="button" className="btn btn-primary" onClick={allowAlways}>
-            {t('tool.approveAlways')}
-          </button>
+          {canAlwaysAllow ? (
+            <button type="button" className="btn btn-primary" onClick={allowAlways}>
+              {t('tool.approveAlways')}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

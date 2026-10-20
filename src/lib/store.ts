@@ -287,6 +287,7 @@ export const useVox = create<VoxState>((set, get) => ({
         userText: clean,
         // 看屏幕的时候现抓一帧，让模型看到的是「你说这句话时」的画面
         image: await get().grabFrame(),
+        region: get().screenRegion,
         grants: get().grants,
         signal: abortController.signal,
         onChunk: (chunk) => {
@@ -443,6 +444,7 @@ export const useVox = create<VoxState>((set, get) => ({
           ),
           userText: text,
           image: await get().grabFrame(),
+          region: get().screenRegion,
           grants: current.grants,
           signal,
           onChunk: (chunk) => {
@@ -639,6 +641,8 @@ function waitForConfirm(
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     set({ pendingConfirm: { request, resolve } });
+    // 确认弹窗在主窗里。要是主窗藏着（用户正在别的软件里），把它叫出来
+    if (typeof window !== 'undefined') void window.frameDesktop?.showMain?.();
   });
 }
 

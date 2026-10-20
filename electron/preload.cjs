@@ -19,6 +19,19 @@ contextBridge.exposeInMainWorld('frameDesktop', {
   /** 显示/隐藏主窗口（全局快捷键走的是主进程，这里给界面留个手动入口） */
   toggleMain: () => ipcRenderer.invoke('frame:toggle-main'),
 
+  /** 强制把主窗叫到前台（动作确认弹窗要用） */
+  showMain: () => ipcRenderer.invoke('frame:show-main'),
+
+  /** 在屏幕绝对坐标上闪一个高亮圈，动作前先让你看清点哪儿 */
+  highlight: (x, y) => ipcRenderer.invoke('frame:highlight', { x, y }),
+
+  /** 高亮窗订阅「要闪哪个点」 */
+  onHighlightPoint: (cb) => {
+    const listener = (_event, point) => cb(point);
+    ipcRenderer.on('frame:highlight-point', listener);
+    return () => ipcRenderer.removeListener('frame:highlight-point', listener);
+  },
+
   /** 悬浮窗把内容高度报给主进程，窗口跟着收放 */
   resizeFloat: (height) => ipcRenderer.send('frame:resize-float', height),
 

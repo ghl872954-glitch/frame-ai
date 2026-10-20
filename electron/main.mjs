@@ -47,6 +47,7 @@ if (isSmoke || process.env.FRAME_DISABLE_GPU === '1') {
 let server = null;
 let mainWindow = null;
 let floatWindow = null;
+let highlightWindow = null;
 /** 是不是我们为了截屏主动藏起来的 —— 只有这种情况才需要放回来 */
 let captureHidden = false;
 
@@ -208,6 +209,46 @@ function createFloatWindow(url) {
   });
 }
 
+/**
+ * 动作高亮层：铺满主屏、全透明、点击穿透，只在「要点哪儿」时闪一下。
+ * 它不抢焦点，也不接鼠标 —— 单纯是给用户看的一个圈。
+ */
+function createHighlightWindow(url) {
+  const bounds = screen.getPrimaryDisplay().bounds;
+  highlightWindow = new BrowserWindow({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    hasShadow: false,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  highlightWindow.setAlwaysOnTop(true, 'screen-saver');
+  // 只是显示，鼠标点击要穿过去，别挡着用户
+  highlightWindow.setIgnoreMouseEvents(true, { forward: true });
+  highlightWindow.loadURL(`${url}/highlight`);
+  highlightWindow.on('closed', () => {
+    highlightWindow = null;
+  });
+}
+
 /** 显示/隐藏主窗：隐藏时用 hide，显示时拉回来并聚焦 */
 function toggleMain() {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
@@ -249,6 +290,32 @@ function registerIpc() {
   });
 
   ipcMain.handle('frame:toggle-main', () => toggleMain());
+
+  ipcMain.handle('frame:show-main', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    return true;
+  });
+
+  // 在屏幕上闪一个高亮圈，等 700ms 再返回 —— 调用方等它返回后才真正点下去
+  ipcMain.handle('frame:highlight', async (_event, point) => {
+    if (!highlightWindow || highlightWindow.isDestroyed()) return false;
+    const x = Number(point?.x);
+    const y = Number(point?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+
+    const bounds = highlightWindow.getBounds();
+    highlightWindow.webContents.send('frame:highlight-point', {
+      x: x - bounds.x,
+      y: y - bounds.y,
+    });
+    highlightWindow.showInactive();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    if (!highlightWindow.isDestroyed()) highlightWindow.hide();
+    return true;
+  });
 
   // 悬浮窗内容高度变化 → 窗口跟着收放，底边保持不动
   ipcMain.on('frame:resize-float', (_event, height) => {
@@ -319,6 +386,7 @@ async function boot() {
   registerIpc();
   createMainWindow(url);
   createFloatWindow(url);
+  createHighlightWindow(url);
 
   const registered = globalShortcut.register(HOTKEY, () => toggleMain());
   if (!registered) {
